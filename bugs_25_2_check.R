@@ -1,3 +1,86 @@
+## PUBRE 
+##############
+rm(list = ls())
+library(dplyr)
+library(tidyr)
+
+library(data.table)
+library(arrow)
+
+papers <- fread("/home/janet/Documents/disgenetplus_v2/DATA/papers_disgenet_v25_2_bugs.tsv")
+papers
+
+# data <- fread("/home/janet/Downloads/prod_dgn_pubre_v25.3-dev-tmvar3_part_1.tsv")
+data <- fread("/home/janet/Downloads/prod_dgn_pubre_v25.3-dev-tmvar2_part_1.tsv")
+data <- data[ id %in% papers$x, ]
+
+length(intersect(papers$x, data$id))
+length(setdiff(papers$x, data$id))
+# 148 154
+data
+
+pubre <- data %>% unique()
+
+geneinfo <- fread("~/Documents/disgenetplus_v2/DISGENET_PLUS_RESOURCES/CURATED_SOURCES/CURATED_SOURCES_DOWNLOADS/Homo_sapiens.gene_info.gz")
+geneinfo <- geneinfo %>% select(GeneID, Symbol)
+genes <- fread("/home/janet/Documents/disgenetplus_v2/DISGENET_PLUS_RESOURCES/SHARED/PERCOLATORS/v25.1.1/GENE/TSV/disgenet_gene_dictionary_global_to_specific_gene_ID_mappings_term_added.tsv" )
+disnames <- fread("/home/janet/Documents/disgenetplus_v2/DATA/original_data/UMLS/dis_names_2024AB.tsv", quote = "") 
+chemnames <- fread("/home/janet/Documents/disgenetplus_v2/DATA/CHEMICAL_PERCOLATOR/chemical_percolator_names_25.3.tsv", sep = "\t",quote="")
+
+
+pubre$global_gene_ID <- gsub("\\'", "", pubre$e1_gene_ids)
+pubre$global_gene_ID <- gsub("\\[", "", pubre$global_gene_ID)
+pubre$global_gene_ID <- gsub("\\]", "", pubre$global_gene_ID)
+pubre$global_gene_ID <- gsub("-", "_", pubre$global_gene_ID)
+setdiff(pubre$global_gene_ID, genes$global_gene_ID)
+
+pubre <- separate_rows(pubre, global_gene_ID , sep = ", ")
+setdiff(pubre$global_gene_ID, genes$global_gene_ID)
+
+
+pubre$cui <- gsub("\\'", "", pubre$e2_dis_cuis)
+pubre$cui <- gsub("\\[", "", pubre$cui)
+pubre$cui <- gsub("\\]", "", pubre$cui)
+pubre <- separate_rows(pubre, cui , sep = ", ")
+setdiff(pubre$cui, disnames$V1)
+
+pubre <- merge(pubre, genes,by = "global_gene_ID", all.x = T)
+pubre <- pubre %>% select(-UNIPROT, -HGNC)
+setdiff(pubre$NCBI, geneinfo$GeneID)
+pubre <- separate_rows(pubre, NCBI , sep = ", ")
+setdiff(pubre$NCBI, geneinfo$GeneID)
+
+pubre <- merge(pubre, geneinfo,by.x = "NCBI", by.y = "GeneID", all.x=T )
+
+pubre$chemical_ids  <- pubre$e3_chemical_ids
+pubre$chemical_ids <- gsub("\\'", "", pubre$chemical_ids)
+pubre$chemical_ids <- gsub("\\[", "", pubre$chemical_ids)
+pubre$chemical_ids <- gsub("\\]", "", pubre$chemical_ids)
+pubre$chemical_ids <- gsub("-", "_", pubre$chemical_ids)
+
+setdiff(pubre$chemical_ids, chemnames$concept_id)
+pubre <- separate_rows(pubre, chemical_ids , sep = ", ")
+
+setdiff(pubre$chemical_ids, chemnames$concept_id)
+
+pubre[! pubre$chemical_ids %in% chemnames$concept_id ,] %>% group_by(e3_text,chemical_ids) %>% summarise(nn = n()) %>% arrange(desc(nn))
+
+pubre <- merge(pubre, chemnames, by.x = "chemical_ids", by.y =  "concept_id", all.x = T)
+pubre %>% group_by(e3_text,chemical_ids) %>% summarise(nn = n()) %>% arrange(desc(nn))
+pubre <- merge(pubre, disnames, by.x = "cui", by.y =  "V1", all.x = T)
+
+write.table(pubre, "/home/janet/Documents/disgenetplus_v2/DATA/cleaned_pubre_v25_3_tmvar2.tsv",
+            quote = F, row.names= F, sep = "\t" )
+
+
+
+
+
+
+
+
+
+
 ## PUBRE 25.2
 ##############
 rm(list = ls())
